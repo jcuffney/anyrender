@@ -2,6 +2,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod image_cache;
+mod image_convert;
 mod image_renderer;
 mod scene;
 mod window_renderer;

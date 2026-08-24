@@ -5,6 +5,29 @@ All notable changes to this crate are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Built-in bounded image cache: converted images are registered in the `vello_cpu`
+  image registry once and reused across frames, with age- and byte-budget-based
+  eviction plus automatic eviction when the source image data is dropped.
+- `ImageCacheConfig` for tuning the eviction policy, and
+  `clear_image_cache()` on `VelloCpuScenePainter`/`VelloCpuImageRenderer` for
+  explicit cleanup.
+- SIMD-accelerated image alpha premultiplication (vendored from
+  [vello#1834](https://github.com/linebender/vello/pull/1834)).
+
+### Changed
+
+- `VelloCpuScenePainter` now has private fields; construct it with
+  `VelloCpuScenePainter::new` (breaking).
+
+### Removed
+
+- The `experimental_image_cache` feature. The new cache replaces it and is
+  always enabled (breaking).
+
 ## [0.16.0] - 2026-08-16
 
 ### Changed

@@ -4,47 +4,59 @@ use anyrender::{Filter, NormalizedCoord, Paint, PaintRef, PaintScene, RenderCont
 use glifo::FontEmbolden;
 use kurbo::{Affine, Diagonal2, Rect, Shape, Stroke};
 use peniko::{BlendMode, Color, Fill, FontData, ImageBrush, StyleRef};
-use vello_cpu::{ImageSource, PaintType, Pixmap};
+use vello_cpu::{PaintType, Pixmap};
+
+use crate::image_cache::{ImageCache, ImageCacheConfig};
 
 const DEFAULT_TOLERANCE: f64 = 0.1;
 
-fn anyrender_paint_to_vello_cpu_paint<'a>(paint: PaintRef<'a>) -> PaintType {
-    match paint {
-        Paint::Solid(alpha_color) => PaintType::Solid(alpha_color),
-        Paint::Gradient(gradient) => PaintType::Gradient(gradient.clone()),
-        Paint::Image(image) => PaintType::Image(ImageBrush {
-            #[cfg(not(feature = "experimental_image_cache"))]
-            image: ImageSource::from_peniko_image_data(image.image),
-            #[cfg(feature = "experimental_image_cache")]
-            image: convert_image_cached(image.image),
-            sampler: image.sampler,
-        }),
-        // TODO: custom paint
-        Paint::Resource(_) => PaintType::Solid(peniko::color::palette::css::TRANSPARENT),
-        Paint::Custom(_) => PaintType::Solid(peniko::color::palette::css::TRANSPARENT),
-    }
-}
-
-#[cfg(feature = "experimental_image_cache")]
-fn convert_image_cached(image: &peniko::ImageData) -> ImageSource {
-    use std::collections::HashMap;
-    use std::sync::{LazyLock, Mutex};
-    static CACHE: LazyLock<Mutex<HashMap<u64, ImageSource>>> =
-        LazyLock::new(|| Mutex::new(HashMap::new()));
-
-    let mut map = CACHE.lock().unwrap();
-    let id = image.data.id();
-    map.entry(id)
-        .or_insert_with(|| ImageSource::from_peniko_image_data(image))
-        .clone()
-}
-
 pub struct VelloCpuScenePainter {
-    pub render_ctx: vello_cpu::RenderContext,
-    pub resources: vello_cpu::Resources,
+    pub(crate) render_ctx: vello_cpu::RenderContext,
+    pub(crate) resources: vello_cpu::Resources,
+    pub(crate) image_cache: ImageCache,
 }
 
 impl VelloCpuScenePainter {
+    pub fn new(width: u16, height: u16) -> Self {
+        Self::with_image_cache_config(width, height, ImageCacheConfig::default())
+    }
+
+    pub fn with_image_cache_config(width: u16, height: u16, config: ImageCacheConfig) -> Self {
+        Self {
+            render_ctx: vello_cpu::RenderContext::new(width, height),
+            resources: vello_cpu::Resources::new(),
+            image_cache: ImageCache::new(config),
+        }
+    }
+
+    fn convert_paint(&mut self, paint: PaintRef<'_>) -> PaintType {
+        match paint {
+            Paint::Solid(alpha_color) => PaintType::Solid(alpha_color),
+            Paint::Gradient(gradient) => PaintType::Gradient(gradient.clone()),
+            Paint::Image(image) => PaintType::Image(ImageBrush {
+                image: self
+                    .image_cache
+                    .get_or_register(&mut self.resources, image.image),
+                sampler: image.sampler,
+            }),
+            // TODO: custom paint
+            Paint::Resource(_) => PaintType::Solid(peniko::color::palette::css::TRANSPARENT),
+            Paint::Custom(_) => PaintType::Solid(peniko::color::palette::css::TRANSPARENT),
+        }
+    }
+
+    /// Advance the image cache's frame counter and evict stale entries.
+    ///
+    /// Should be called once per frame, after rendering.
+    pub fn maintain(&mut self) {
+        self.image_cache.maintain(&mut self.resources);
+    }
+
+    /// Drop all cached image conversions.
+    pub fn clear_image_cache(&mut self) {
+        self.image_cache.clear(&mut self.resources);
+    }
+
     pub fn finish(mut self) -> Pixmap {
         let mut pixmap = Pixmap::new(self.render_ctx.width(), self.render_ctx.height());
         self.render_ctx.render(pixmap.as_mut(), &mut self.resources);
@@ -108,8 +120,8 @@ impl PaintScene for VelloCpuScenePainter {
     ) {
         self.render_ctx.set_transform(transform);
         self.render_ctx.set_stroke(style.clone());
-        self.render_ctx
-            .set_paint(anyrender_paint_to_vello_cpu_paint(paint.into()));
+        let paint = self.convert_paint(paint.into());
+        self.render_ctx.set_paint(paint);
         self.render_ctx
             .set_paint_transform(brush_transform.unwrap_or(Affine::IDENTITY));
         self.render_ctx
@@ -126,8 +138,8 @@ impl PaintScene for VelloCpuScenePainter {
     ) {
         self.render_ctx.set_transform(transform);
         self.render_ctx.set_fill_rule(style);
-        self.render_ctx
-            .set_paint(anyrender_paint_to_vello_cpu_paint(paint.into()));
+        let paint = self.convert_paint(paint.into());
+        self.render_ctx.set_paint(paint);
         self.render_ctx
             .set_paint_transform(brush_transform.unwrap_or(Affine::IDENTITY));
         self.render_ctx
@@ -149,8 +161,8 @@ impl PaintScene for VelloCpuScenePainter {
         glyphs: impl Iterator<Item = anyrender::Glyph> + Clone,
     ) {
         self.render_ctx.set_transform(transform);
-        self.render_ctx
-            .set_paint(anyrender_paint_to_vello_cpu_paint(paint.into()));
+        let paint = self.convert_paint(paint.into());
+        self.render_ctx.set_paint(paint);
 
         let style: StyleRef<'a> = style.into();
         match style {

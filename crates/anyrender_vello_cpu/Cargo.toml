@@ -17,11 +17,6 @@ log_frame_times = [
   "softbuffer_window_renderer?/log_frame_times",
   "pixels_window_renderer?/log_frame_times",
 ]
-
-# Caches image premultiplication, but the cache is never cleared
-# Useful for benchmarking (as we expect to eventually eliminate this cost)
-# but not recommended for use in production
-experimental_image_cache = []
 filters = []
 
 [dependencies]

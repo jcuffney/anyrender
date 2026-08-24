@@ -250,6 +250,8 @@ name = "anyrender_vello_cpu"
 version = "0.16.0"
 dependencies = [
  "anyrender",
+ "bytemuck",
+ "color",
  "debug_timer",
  "glifo",
  "kurbo",

@@ -159,40 +159,46 @@ fn convert_image(image: &peniko::ImageData) -> Arc<Pixmap> {
     let height = image.height.try_into().unwrap();
 
     let data = image.data.data();
-    let pixels: Vec<PremulRgba8> = match image.format {
-        peniko::ImageFormat::Rgba8 => data
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|p| PremulRgba8 {
-                r: p[0],
-                g: p[1],
-                b: p[2],
-                a: p[3],
-            })
-            .collect(),
-        peniko::ImageFormat::Bgra8 => data
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|p| PremulRgba8 {
-                r: p[2],
-                g: p[1],
-                b: p[0],
-                a: p[3],
-            })
-            .collect(),
+    // Bulk-copy the source bytes (RGBA8 is byte-identical to `PremulRgba8`)
+    // rather than converting pixel-by-pixel, then mutate in place.
+    let pixel_bytes = data.len() & !3;
+    let mut bytes = Vec::with_capacity(pixel_bytes);
+    bytes.extend_from_slice(&data[..pixel_bytes]);
+
+    match image.format {
+        peniko::ImageFormat::Rgba8 => {}
+        peniko::ImageFormat::Bgra8 => {
+            for pixel in bytes.as_chunks_mut::<4>().0 {
+                pixel.swap(0, 2);
+            }
+        }
         format => unimplemented!("Unsupported image format: {format:?}"),
+    }
+
+    let premultiplied = image.alpha_type == peniko::ImageAlphaType::AlphaPremultiplied;
+    let may_have_transparency = if premultiplied {
+        bytes.as_chunks::<4>().0.iter().any(|p| p[3] != 255)
+    } else {
+        premultiply_rgba8(&mut bytes)
     };
 
-    let mut pixmap = Pixmap::from_parts_with_opacity(pixels, width, height, true);
-    if image.alpha_type == peniko::ImageAlphaType::AlphaPremultiplied {
-        pixmap.recompute_may_have_transparency();
-    } else {
-        let may_have_transparency = premultiply_rgba8(pixmap.data_as_u8_slice_mut());
-        pixmap.set_may_have_transparency(may_have_transparency);
-    }
-    Arc::new(pixmap)
+    let pixels: Vec<PremulRgba8> = bytemuck::try_cast_vec(bytes).unwrap_or_else(|(_, bytes)| {
+        // Fall back to copying if the allocation is incompatible with an
+        // in-place cast (e.g. over-allocated capacity).
+        bytes
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|&p| PremulRgba8::from_u8_array(p))
+            .collect()
+    });
+
+    Arc::new(Pixmap::from_parts_with_opacity(
+        pixels,
+        width,
+        height,
+        may_have_transparency,
+    ))
 }
 
 /// Premultiplies each RGBA8 pixel in `data`.

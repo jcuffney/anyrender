@@ -161,7 +161,9 @@ fn convert_image(image: &peniko::ImageData) -> Arc<Pixmap> {
     let data = image.data.data();
     let pixels: Vec<PremulRgba8> = match image.format {
         peniko::ImageFormat::Rgba8 => data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|p| PremulRgba8 {
                 r: p[0],
                 g: p[1],
@@ -170,7 +172,9 @@ fn convert_image(image: &peniko::ImageData) -> Arc<Pixmap> {
             })
             .collect(),
         peniko::ImageFormat::Bgra8 => data
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|p| PremulRgba8 {
                 r: p[2],
                 g: p[1],
@@ -229,7 +233,7 @@ fn premultiply_rgba8_impl<S: Simd>(simd: S, data: &mut [u8]) -> bool {
     }
 
     let mut may_have_transparency = transparency.any_true();
-    for pixel in tail.chunks_exact_mut(4) {
+    for pixel in tail.as_chunks_mut::<4>().0 {
         let alpha = u16::from(pixel[3]);
         may_have_transparency |= alpha != 255;
         let premultiply = |component| ((u16::from(component) * alpha + 255) >> 8) as u8;

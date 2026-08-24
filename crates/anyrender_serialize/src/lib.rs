@@ -365,7 +365,7 @@ fn convert_from_rgba(rgba_blob: &Blob<u8>, target: ImageFormat) -> Result<Blob<u
         ImageFormat::Bgra8 => {
             // Swap R and B channels
             let mut bgra = rgba_blob.data().to_vec();
-            for chunk in bgra.chunks_exact_mut(4) {
+            for chunk in bgra.as_chunks_mut::<4>().0 {
                 chunk.swap(0, 2);
             }
             Ok(Blob::from(bgra))
@@ -383,7 +383,7 @@ fn convert_to_rgba(image: &ImageData) -> Result<Blob<u8>, ArchiveError> {
         ImageFormat::Bgra8 => {
             // Swap B and R channels
             let mut rgba = image.data.data().to_vec();
-            for chunk in rgba.chunks_exact_mut(4) {
+            for chunk in rgba.as_chunks_mut::<4>().0 {
                 chunk.swap(0, 2);
             }
             Ok(Blob::from(rgba))

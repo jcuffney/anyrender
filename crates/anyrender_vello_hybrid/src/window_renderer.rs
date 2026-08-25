@@ -65,6 +65,11 @@ pub struct VelloHybridRendererOptions {
     pub base_color: Color,
     /// Alpha mode used when compositing the window surface.
     pub composite_alpha_mode: anyrender::CompositeAlphaMode,
+    /// Maximum number of frames the presentation engine may queue ahead of the
+    /// display. Each queued frame requires a window-sized swapchain surface, so
+    /// lower values reduce memory usage and input latency at the cost of less
+    /// buffering to absorb slow frames.
+    pub desired_maximum_frame_latency: u32,
 }
 
 impl Default for VelloHybridRendererOptions {
@@ -75,6 +80,7 @@ impl Default for VelloHybridRendererOptions {
             render_settings: RenderSettings::default(),
             base_color: Color::WHITE,
             composite_alpha_mode: anyrender::CompositeAlphaMode::Auto,
+            desired_maximum_frame_latency: 1,
         }
     }
 }
@@ -116,6 +122,13 @@ impl VelloHybridRendererOptions {
     ) -> Self {
         Self {
             composite_alpha_mode,
+            ..self
+        }
+    }
+
+    pub const fn desired_maximum_frame_latency(self, desired_maximum_frame_latency: u32) -> Self {
+        Self {
+            desired_maximum_frame_latency,
             ..self
         }
     }
@@ -295,6 +308,7 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                 }
             }
         };
+        let desired_maximum_frame_latency = self.config.desired_maximum_frame_latency;
         let existing_device_handle = self
             .wgpu_context
             .find_compatible_device_handle(Some(&surface));
@@ -373,7 +387,7 @@ impl WindowRenderer for VelloHybridWindowRenderer {
                     width,
                     height,
                     present_mode: PresentMode::AutoVsync,
-                    desired_maximum_frame_latency: 2,
+                    desired_maximum_frame_latency,
                     alpha_mode: composite_alpha_mode,
                     view_formats: vec![],
                 },

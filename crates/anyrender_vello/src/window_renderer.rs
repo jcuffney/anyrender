@@ -69,6 +69,11 @@ pub struct VelloRendererOptions {
     /// compilation on start-up. Creating it, persisting its data and deciding
     /// when it is stale are all the caller's responsibility.
     pub pipeline_cache: Option<PipelineCache>,
+    /// Maximum number of frames the presentation engine may queue ahead of the
+    /// display. Each queued frame requires a window-sized swapchain surface, so
+    /// lower values reduce memory usage and input latency at the cost of less
+    /// buffering to absorb slow frames.
+    pub desired_maximum_frame_latency: u32,
 }
 
 impl Default for VelloRendererOptions {
@@ -86,6 +91,7 @@ impl VelloRendererOptions {
             antialiasing_method: AaConfig::Msaa16,
             composite_alpha_mode: anyrender::CompositeAlphaMode::Auto,
             pipeline_cache: None,
+            desired_maximum_frame_latency: 1,
         }
     }
 
@@ -127,6 +133,13 @@ impl VelloRendererOptions {
     pub fn pipeline_cache(self, pipeline_cache: PipelineCache) -> Self {
         Self {
             pipeline_cache: Some(pipeline_cache),
+            ..self
+        }
+    }
+
+    pub fn desired_maximum_frame_latency(self, desired_maximum_frame_latency: u32) -> Self {
+        Self {
+            desired_maximum_frame_latency,
             ..self
         }
     }
@@ -287,6 +300,7 @@ impl WindowRenderer for VelloWindowRenderer {
             }
         };
         let pipeline_cache = self.config.pipeline_cache.clone();
+        let desired_maximum_frame_latency = self.config.desired_maximum_frame_latency;
         let existing_device_handle = self
             .wgpu_context
             .find_compatible_device_handle(Some(&surface));
@@ -359,7 +373,7 @@ impl WindowRenderer for VelloWindowRenderer {
                     width,
                     height,
                     present_mode: PresentMode::AutoVsync,
-                    desired_maximum_frame_latency: 2,
+                    desired_maximum_frame_latency,
                     alpha_mode: composite_alpha_mode,
                     view_formats: vec![],
                 },

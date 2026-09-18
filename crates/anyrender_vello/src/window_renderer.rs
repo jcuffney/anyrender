@@ -487,10 +487,14 @@ impl WindowRenderer for VelloWindowRenderer {
         }
         timer.record_time("present");
 
-        render_surface
+        // A timeout here means the driver has not signalled the submission
+        // complete. The frame has already been presented, so there is nothing to
+        // retry and nothing to skip; carrying on is strictly better than
+        // bringing the process down. Same reasoning as the
+        // `maybe_blit_and_present` check above.
+        let _ = render_surface
             .device()
-            .poll(wgpu::PollType::wait_indefinitely())
-            .unwrap();
+            .poll(wgpu::PollType::wait_indefinitely());
 
         timer.record_time("wait");
         timer.print_times("vello: ");

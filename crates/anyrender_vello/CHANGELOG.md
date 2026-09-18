@@ -5,6 +5,12 @@ All notable changes to this crate are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A `wgpu::PollError::Timeout` from the completion `poll` at the end of `WindowRenderer::render` no longer panics. The frame has already been presented at that point, so the error is dropped instead of bringing the process down (#96).
+
 ## [0.14.0] - 2026-08-16
 
 ### Added
